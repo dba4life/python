@@ -12,26 +12,20 @@ import sys
 import io
 import getopt
 import os.path
-#import StringIO
 
 from pdfminer.pdfinterp import PDFResourceManager, process_pdf
 from pdfminer.pdfdevice import TagExtractor
-#from pdfminer.converter import XMLConverter, HTMLConverter, TextConverter
 from pdfminer.converter import TextConverter
 from pdfminer.layout import LAParams
-# from pdfminer.utils import set_debug_logging
 
 def main(argv):
     def usage():
-        print(('usage: %s [-d directory] [-P password] [-o output file] [-O output directory] [-n filename pattern] file ...' % argv[0]))
+        print(('usage: %s [-d directory] [-P password] [-n filename pattern]' % argv[0]))
         return 100
     try:
-        #(opts, args) = getopt.getopt(argv[1:], 'dp:m:P:o:CnAVM:L:W:F:Y:O:t:c:s:')
-        (opts, args) = getopt.getopt(argv[1:], 'P:o:O:n:')
+        (opts, args) = getopt.getopt(argv[1:], 'P:n:d:')
     except getopt.GetoptError:
         return usage()
-
-    if not args: return usage()
 
     # input option
     password = ''
@@ -49,12 +43,13 @@ def main(argv):
     caching = True
     showpageno = True
     laparams = LAParams()
+    inputDirectory = None
 
     for (k, v) in opts:
+        print('%s -> %s' % (k ,v))
         if k == '-P': password = v
-        elif k == '-o': outfile = v
-        elif k == '-O': outdir = v
         elif k == '-n': pattern = v
+        elif k == '-d': inputDirectory = v
 
     rsrcmgr = PDFResourceManager(caching=caching)
 
@@ -64,8 +59,11 @@ def main(argv):
 
     device = TextConverter(rsrcmgr, outfp, laparams=laparams)
 
-    # TODO: Change to variable, defaulting to current directory
-    folder = os.path.dirname(argv[0])
+    # Specify processing directory, defaulting to current directory
+    if(inputDirectory):
+        folder = os.path.abspath(inputDirectory)
+    else:
+        folder = os.path.abspath(argv[0])
 
     # Start the html output
     print('<htlm><head></head><body><table border="1">')
@@ -73,23 +71,31 @@ def main(argv):
     # Cycle through all PDFs in directory, convert PDFs to text
     for filename in os.listdir(folder):
         if(filename.lower().endswith('.pdf') and pattern.lower() in filename.lower()):
-            print('Processing %s' % filename)
-            fp = io.open(filename, 'rb')
-            process_pdf(rsrcmgr, device, fp, pagenos, password=password,
-                        caching=caching, check_extractable=True)
-            
-            fp.close()        
-            
             # Cleanup filename
             checklist = ''
             checkList = filename.replace('eplc_', '').replace('_checklist.pdf', '')
             checkList = checkList.replace('_', ' ').title()
+            
+            # Add path to filename
+            filename = os.path.join(folder, filename)
+            
+            # Open PDF
+            fp = io.open(filename, 'rb')
+            
+            # Extract text
+            process_pdf(rsrcmgr, device, fp, pagenos, password=password,
+                        caching=caching, check_extractable=True)
+            
+            fp.close()        
             
             # Convert StringIO to actual string
             str = pdfTxt.getvalue()
             
             # Strip untranslateable unicode
             str = str.replace('\u2019', '')
+            str = str.replace('\u201c', '')
+            str = str.replace('\u201d', '')
+            str = str.replace('\u2022', '')
             str = str.replace('\uf0b7', '')
             
             # Cleanup anomalies
